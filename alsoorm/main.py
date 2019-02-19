@@ -1,11 +1,11 @@
 import asyncio
 import json
 from datetime import date, datetime
-from pathlib import Path
 from typing import Dict, List, Optional
 
 import asyncpg
-from asyncpg.exceptions import UndefinedTableError
+
+# from asyncpg.exceptions import UndefinedTableError
 from asyncpg.pool import Pool
 from tenacity import retry, stop_after_delay
 
@@ -106,17 +106,6 @@ class Table:
         else:
             raise AttributeError(f"No attribute {attr}")
 
-    @property
-    def order_column(self):
-        return next(
-            [
-                column
-                for column in self.columns
-                if column.column_name == f"{self.table_name}_order"
-            ],
-            None,
-        )
-
 
 @dataclass
 class Schema:
@@ -140,7 +129,6 @@ async def init_connection(conn):
 class DB:
     db_url: str
     config: alsoorm.Config = alsoorm.config
-    setup_schema: Optional[str] = None
     schemas: Dict[str, Schema] = field(default_factory=dict)
     connection_pool: Pool = None
 
@@ -154,25 +142,10 @@ class DB:
     async def setup_database(self):
         await self.connect()
 
-        cwd = Path().cwd()
-        with open(cwd / "testline" / "schema.sql") as s:
-            schema_sql = s.read()
-
-        async with self.connection_pool.acquire() as connection:
-            try:
-                version = await connection.fetchrow(
-                    "SELECT * FROM sys.version WHERE version_object = 'db'"
-                )
-                version = version["version"]
-            except UndefinedTableError:
-                version = 0
-            if version == 0:
-                await connection.execute(schema_sql)
-
-    async def get_schema(self, schema_name: str) -> Optional[Schema]:
+    async def get_schema(self, schema_name: str) -> Schema:
         if schema_name not in self.schemas:
             self.schemas[schema_name] = await self.reflect_schema(schema_name)
-        return self.schemas.get(schema_name)
+        return self.schemas[schema_name]
 
     async def reflect_schema(self, schema_name: str = "public") -> Schema:
         async with self.connection_pool.acquire() as connection:
